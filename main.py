@@ -108,29 +108,36 @@ def main():
     ]
 )
     
-    messages = [types.Content(role="User", parts=[types.Part(text=user_prompt)])]
-    response = client.models.generate_content(model='gemini-2.0-flash-001', 
-                                              contents=messages,
-                                              config=types.GenerateContentConfig(
-                                                  tools=[available_functions],
-                                                  system_instruction=system_prompt,))
+    MAX_ITER = 20
     
-    
-    if response.function_calls:
-        for fc in response.function_calls:
-            fc_result = call_function(fc, flag_verbose)
-            
-            part = fc_result.parts[0]
-            if not hasattr(part, "function_response"):
-                raise RuntimeError(f"call_function didn’t return a function_response for {fc.name}")
-            
-            if flag_verbose:
-                print(f"-> {fc_result.parts[0].function_response.response}")
+    for _ in range(MAX_ITER):
+        messages = [types.Content(role="User", parts=[types.Part(text=user_prompt)])]
+        response = client.models.generate_content(model='gemini-2.0-flash-001', 
+                                                  contents=messages,
+                                                  config=types.GenerateContentConfig(
+                                                      tools=[available_functions],
+                                                      system_instruction=system_prompt,))
         
+        for cand in response.candidates:
+            messages.append(cand.content)
+    
+        if response.function_calls:
+            for fc in response.function_calls:
+                fc_result = call_function(fc, flag_verbose)
+
+                part = fc_result.parts[0]
+                if not hasattr(part, "function_response"):
+                    raise RuntimeError(f"call_function didn’t return a function_response for {fc.name}")
+
+                if flag_verbose:
+                    print(f"-> {fc_result.parts[0].function_response.response}")
+                messages.append(fc_result)
+                continue
+
         print(response.text)
+        break
     else:
-        print(response.text)
-        print("No function calls were returned.")
+        print("Reached max iterations")
     
 if __name__ == "__main__":
     main()
